@@ -1,6 +1,7 @@
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, IconName, Sizable as _, h_flex, v_flex};
 use gpui_kit::component::StyledExt as _;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -35,11 +36,24 @@ impl Packrat {
                 .into_any_element();
         };
 
+        let ix = self.selected.unwrap_or_default();
         panel
             .p_5()
             .gap_5()
             .overflow_y_scrollbar()
             .child(header(package, cx))
+            .child(
+                h_flex().child(
+                    Button::new("remove-package")
+                        .danger()
+                        .outline()
+                        .small()
+                        .icon(IconName::Delete)
+                        .label("Remove")
+                        .tooltip("Preview what gets removed, then remove it")
+                        .on_click(cx.listener(move |this, _, window, cx| this.remove_package(ix, window, cx))),
+                ),
+            )
             .child(facts(package, cx))
             .children(self.chip_section("Depends on", &package.depends, cx))
             .children(self.chip_section("Required by", &package.required_by, cx))

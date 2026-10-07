@@ -4,7 +4,7 @@ Packrat is a desktop app for browsing everything installed on an Arch Linux syst
 
 I wanted an easier way to see what's actually on my machine. `pacman -Q` gives you about two thousand lines with no real way to tell an app from a library, so Packrat sorts everything into categories you can click through, with search and a details panel for each package.
 
-Right now Packrat is read-only. It shows you what's installed, but it doesn't install, update, or remove anything yet. Removing packages, updates, and installing new ones are coming next, all through a built-in terminal pane so you can see exactly what runs.
+You can also remove packages from it. Anything that changes your system runs as a real command in a terminal pane at the bottom of the window, so you always see exactly what's running and answer the password and `[Y/n]` prompts yourself. Updates and installing new packages aren't in yet.
 
 ## What it does
 
@@ -16,6 +16,8 @@ Right now Packrat is read-only. It shows you what's installed, but it doesn't in
 - Searches names, app names, and descriptions as you type
 - Shows each package's version, size, install date, license, website, dependencies, what needs it, and optional dependencies
 - Click any dependency to jump straight to it
+- Remove a package (repo, AUR, or Flatpak), or clear out every orphan at once
+- A built-in terminal pane, which you can also open as a normal shell
 
 ## How it figures out categories
 
@@ -27,10 +29,37 @@ Arch doesn't tag packages by type, so Packrat works it out:
 
 It's a heuristic, so a few packages will end up somewhere slightly odd. Search covers those.
 
+## Removing packages
+
+Select a package and click **Remove** in the details panel. Before anything runs, Packrat asks pacman for a dry run (`pacman -Rsp`, no root needed) and shows you every package that would go, including dependencies nothing else needs, plus how much space you'd get back and the exact command it's about to run.
+
+Click **Remove** in that dialog and the command runs in the terminal pane:
+
+```bash
+sudo pacman -Rns <package>
+```
+
+You type your password in the pane, and pacman still asks its own `[Y/n]`, so there's one last chance to back out. If pacman won't remove something (because other packages need it), you get its reason instead and nothing runs.
+
+In the **Orphans** view, **Remove All** does the same thing for every orphan in one go.
+
+In **Flatpak Runtimes**, **Remove Unused** runs `flatpak uninstall --unused` for your user and system installations. Flatpak lists what it's about to remove and asks before doing anything, so this one goes straight to the pane.
+
+Flatpaks use `flatpak uninstall`. System-wide Flatpaks get `sudo` in front, which keeps them working on setups without a polkit agent (Niri, for example).
+
+When a command finishes successfully, the package list reloads and the pane closes itself after a moment. If something fails, the pane stays open so you can read the error.
+
+## The terminal pane
+
+Press `` Ctrl+` `` to open or hide it, and drag its top edge to resize it. With nothing running, **Open Shell** starts your normal shell (`$SHELL`) in it.
+
+It's a real terminal, using the same emulator as Alacritty, so colors, progress bars, and tab completion all work. Select text with the mouse, copy with `Ctrl+Shift+C`, and paste with `Ctrl+Shift+V`. After a program exits, press `Enter` or `Esc` to close the pane, or click **New Shell**.
+
 ## Requirements
 
 - Arch Linux or an Arch-based distro (I use CachyOS)
 - A GPU with a working Vulkan driver, since GPUI draws with Vulkan
+- `sudo` set up for your user, since removals run `sudo pacman`
 - Flatpak is optional. Without it you just won't see a Flatpak section.
 
 ## Building
@@ -54,12 +83,15 @@ cargo run --release
 | `↑` `↓` or `k` `j` | Move through the list |
 | `Home` `End` | First or last package |
 | `Alt+↑` `Alt+↓` | Previous or next sidebar view |
+| `` Ctrl+` `` | Open or hide the terminal pane |
 | `Ctrl+R` or `F5` | Reload packages |
 | `Ctrl+Q` | Quit |
 
+While the terminal pane has focus, `Tab`, `Ctrl+R`, `Ctrl+F` and `Ctrl+L` go to the program running in it instead of Packrat.
+
 ## How it reads your packages
 
-Packrat reads pacman's local database files in `/var/lib/pacman/local` directly instead of linking libalpm. That keeps it working when pacman bumps its library version, and it means Packrat never needs root just to show you what's installed. Repo names come from `pacman -Sl`, which only reads the sync databases already on disk, and Flatpaks come from `flatpak list`.
+Packrat reads pacman's local database files in `/var/lib/pacman/local` directly instead of linking libalpm. That keeps it working when pacman bumps its library version, and it means Packrat never needs root just to show you what's installed. Root only comes in through `sudo` in the terminal pane, for commands you confirm. Repo names come from `pacman -Sl`, which only reads the sync databases already on disk, and Flatpaks come from `flatpak list`.
 
 AUR and orphan detection match what `pacman -Qm` and `pacman -Qdt` report.
 

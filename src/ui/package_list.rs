@@ -9,6 +9,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{LIST_CONTEXT, Packrat};
+use crate::model::category::Category;
 use crate::model::filter::{Sort, View};
 use crate::model::package::{Package, Source, SourceKind, format_size};
 
@@ -86,6 +87,9 @@ impl Packrat {
             (Some(SourceKind::Flatpak), "Flatpak"),
         ];
         let current_sort = self.filter.sort;
+        let show_remove_orphans = self.filter.view == View::Orphans && !self.visible.is_empty();
+        let show_remove_unused =
+            self.filter.view == View::Category(Category::Runtimes) && !self.visible.is_empty();
         let this = cx.entity().downgrade();
 
         h_flex()
@@ -111,6 +115,30 @@ impl Packrat {
                             .child(self.visible.len().to_string()),
                     ),
             )
+            .when(show_remove_orphans, |this| {
+                this.child(
+                    Button::new("remove-orphans")
+                        .danger()
+                        .outline()
+                        .small()
+                        .flex_shrink_0()
+                        .label("Remove All")
+                        .tooltip("Remove every orphan in one go")
+                        .on_click(cx.listener(|this, _, window, cx| this.remove_orphans(window, cx))),
+                )
+            })
+            .when(show_remove_unused, |this| {
+                this.child(
+                    Button::new("remove-unused-runtimes")
+                        .danger()
+                        .outline()
+                        .small()
+                        .flex_shrink_0()
+                        .label("Remove Unused")
+                        .tooltip("Remove runtimes no installed app needs")
+                        .on_click(cx.listener(|this, _, window, cx| this.remove_unused_runtimes(window, cx))),
+                )
+            })
             .child(h_flex().gap_1().flex_shrink_0().children(sources.into_iter().map(|(source, label)| {
                 Button::new(SharedString::from(format!("source-{label}")))
                     .ghost()

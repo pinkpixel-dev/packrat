@@ -1,12 +1,15 @@
 mod details;
 mod package_list;
+mod remove;
 mod sidebar;
 mod title_bar;
 
 use std::rc::Rc;
 
 use gpui_kit::component::input::{InputEvent, InputState};
-use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
+use gpui_kit::component::notification::Notification;
+use gpui_kit::component::resizable::{resizable_panel, v_resizable};
+use gpui_kit::component::{ActiveTheme as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::*;
 
 use crate::model::category::Category;
@@ -14,6 +17,12 @@ use crate::model::filter::{Filter, Sort, View};
 use crate::model::inventory::Inventory;
 use crate::model::package::{Package, SourceKind, strip_constraint};
 use crate::sources;
+use crate::terminal::{Command, PaneEvent, Status, TerminalView};
+
+/// Starting height of the terminal pane.
+const TERMINAL_HEIGHT: f32 = 300.;
+/// How long a finished command stays on screen before the pane closes itself.
+const AUTO_CLOSE_DELAY: std::time::Duration = std::time::Duration::from_millis(1500);
 
 const KEY_CONTEXT: &str = "Packrat";
 /// Active only while the package list has focus, so single-letter keys never
@@ -22,7 +31,19 @@ const LIST_CONTEXT: &str = "PackageList";
 
 actions!(
     packrat,
-    [SelectNext, SelectPrevious, SelectFirst, SelectLast, NextView, PreviousView, FocusSearch, FocusList, Refresh, Quit]
+    [
+        SelectNext,
+        SelectPrevious,
+        SelectFirst,
+        SelectLast,
+        NextView,
+        PreviousView,
+        FocusSearch,
+        FocusList,
+        ToggleTerminal,
+        Refresh,
+        Quit
+    ]
 );
 
 pub fn init(cx: &mut App) {
@@ -38,6 +59,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("alt-up", PreviousView, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-f", FocusSearch, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-l", FocusList, Some(KEY_CONTEXT)),
+        KeyBinding::new("ctrl-`", ToggleTerminal, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-r", Refresh, Some(KEY_CONTEXT)),
         KeyBinding::new("f5", Refresh, Some(KEY_CONTEXT)),
         KeyBinding::new("ctrl-q", Quit, Some(KEY_CONTEXT)),
@@ -61,13 +83,16 @@ pub struct Packrat {
     /// The selected package, as an inventory index.
     selected: Option<usize>,
     list_scroll: UniformListScrollHandle,
+    terminal: Entity<TerminalView>,
+    terminal_open: bool,
     _subscriptions: Vec<Subscription>,
 }
 
 impl Packrat {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search packages"));
-        let subscriptions = vec![cx.subscribe_in(&search, window, |this, search, event: &InputEvent, window, cx| {
+        let terminal = cx.new(TerminalView::new);
+        let mut subscriptions = vec![cx.subscribe_in(&search, window, |this, search, event: &InputEvent, window, cx| {
             match event {
                 InputEvent::Change => {
                     this.filter.query = search.read(cx).value().to_string();
@@ -78,6 +103,25 @@ impl Packrat {
                 _ => {}
             }
         })];
+        subscriptions.push(cx.subscribe_in(&terminal, window, |this, _, event: &PaneEvent, window, cx| match event {
+            // Whatever ran probably changed what's installed.
+            PaneEvent::Finished { status, label, auto_close } => {
+                if *status != Status::Exited(Some(0)) {
+                    // Failures stay open so the error is still on screen.
+                    return;
+                }
+                this.reload(cx);
+                if *auto_close {
+                    window.push_notification(Notification::success(format!("Done: {label}")), cx);
+                    this.close_terminal_soon(window, cx);
+                }
+            }
+            PaneEvent::Hide => {
+                this.terminal_open = false;
+                this.focus_handle.focus(window, cx);
+                cx.notify();
+            }
+        }));
 
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
@@ -90,6 +134,8 @@ impl Packrat {
             visible: Rc::default(),
             selected: None,
             list_scroll: UniformListScrollHandle::new(),
+            terminal,
+            terminal_open: false,
             _subscriptions: subscriptions,
         };
         this.reload(cx);
@@ -266,6 +312,45 @@ impl Packrat {
         self.focus_handle.focus(window, cx);
     }
 
+    /// Opens the terminal pane and runs `command` in it.
+    pub(super) fn run_command(&mut self, command: Command, window: &mut Window, cx: &mut Context<Self>) {
+        let label = command.display();
+        let result = self.terminal.update(cx, |terminal, cx| terminal.run(command, true, window, cx));
+        match result {
+            Ok(()) => {
+                self.terminal_open = true;
+                cx.notify();
+            }
+            Err(err) => window.push_notification(Notification::error(format!("Couldn't run {label}: {err}")), cx),
+        }
+    }
+
+    /// Hides the pane a moment after a command succeeds, long enough to see
+    /// "Done". Skipped if something else started running in the meantime.
+    fn close_terminal_soon(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.spawn_in(window, async move |this, cx| {
+            cx.background_executor().timer(AUTO_CLOSE_DELAY).await;
+            _ = this.update_in(cx, |this, window, cx| {
+                if this.terminal_open && !this.terminal.read(cx).is_running(cx) {
+                    this.terminal_open = false;
+                    this.focus_handle.focus(window, cx);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn toggle_terminal(&mut self, _: &ToggleTerminal, window: &mut Window, cx: &mut Context<Self>) {
+        self.terminal_open = !self.terminal_open;
+        if self.terminal_open {
+            self.terminal.read(cx).focus_handle(cx).focus(window, cx);
+        } else {
+            self.focus_handle.focus(window, cx);
+        }
+        cx.notify();
+    }
+
     fn refresh(&mut self, _: &Refresh, _: &mut Window, cx: &mut Context<Self>) {
         self.reload(cx);
     }
@@ -278,13 +363,24 @@ impl Packrat {
         match &self.load {
             Load::Loading => centered_message("Reading installed packages…", cx),
             Load::Failed(err) => centered_message(err.clone(), cx),
-            Load::Ready(_) => h_flex()
-                .size_full()
-                .min_h_0()
-                .child(self.render_sidebar(cx))
-                .child(self.render_list(window, cx))
-                .child(self.render_details(cx))
-                .into_any_element(),
+            Load::Ready(_) => {
+                let browser = h_flex()
+                    .size_full()
+                    .min_h_0()
+                    .child(self.render_sidebar(cx))
+                    .child(self.render_list(window, cx))
+                    .child(self.render_details(cx));
+                v_resizable("layout")
+                    .child(resizable_panel().child(browser))
+                    .child(
+                        resizable_panel()
+                            .size(px(TERMINAL_HEIGHT))
+                            .size_range(px(120.)..px(1600.))
+                            .visible(self.terminal_open)
+                            .child(self.terminal.clone()),
+                    )
+                    .into_any_element()
+            }
         }
     }
 }
@@ -315,6 +411,7 @@ impl Render for Packrat {
             .on_action(cx.listener(Self::next_view))
             .on_action(cx.listener(Self::previous_view))
             .on_action(cx.listener(Self::focus_list))
+            .on_action(cx.listener(Self::toggle_terminal))
             .on_action(cx.listener(Self::refresh))
             .on_action(cx.listener(Self::quit))
             .size_full()

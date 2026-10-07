@@ -1,6 +1,8 @@
 mod assets;
 mod model;
+mod ops;
 mod sources;
+mod terminal;
 mod theme;
 mod ui;
 
@@ -15,6 +17,7 @@ fn main() {
     application().with_assets(assets::AppAssets).run(|cx| {
         init(cx);
         theme::init(cx);
+        terminal::init(cx);
         ui::init(cx);
 
         cx.on_window_closed(|cx, _| {

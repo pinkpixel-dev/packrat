@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.0 - October 7, 2026
+
+### 🖥️ Terminal pane
+
+- New built-in terminal at the bottom of the window, using alacritty_terminal with a real PTY
+- Colors, scrollback, mouse selection, `Ctrl+Shift+C` / `Ctrl+Shift+V`, and a resizable pane
+- `` Ctrl+` `` opens or hides it, and **Open Shell** starts your own shell in it
+- Tab, `Ctrl+R`, `Ctrl+F` and `Ctrl+L` go to the program in the pane while it has focus
+- Finished programs show Done or Failed in the header; `Enter` or `Esc` closes the pane
+
+### 🗑️ Removing packages
+
+- **Remove** button for repo, AUR, and Flatpak packages
+- Preview dialog from `pacman -Rsp` listing everything that would go, the space freed, and the exact command
+- Removals run as `sudo pacman -Rns` in the pane, so pacman's own `[Y/n]` still applies
+- Shows pacman's reason when a package can't be removed, without running anything
+- **Remove All** in the Orphans view
+- System Flatpaks uninstall through `sudo`, so they work without a polkit agent
+- **Remove Unused** in Flatpak Runtimes
+- The list reloads after a successful command, and the pane closes itself a moment later
+
+### 🏷️ Versioning
+
+- Bumped to 0.2.0
+
 ## 0.1.0 - October 7, 2026
 
 ### 📦 Package browser
