@@ -6,6 +6,8 @@
 
 Packrat is a desktop app for browsing everything installed on an Arch Linux system: repo packages, AUR packages, and Flatpaks, all in one list.
 
+![Packrat](screenshot.png)
+
 I wanted an easier way to see what's actually on my machine. `pacman -Q` gives you about two thousand lines with no real way to tell an app from a library, so Packrat sorts everything into categories you can click through, with search and a details panel for each package.
 
 You can also remove packages from it. Anything that changes your system runs as a real command in a terminal pane at the bottom of the window, so you always see exactly what's running and answer the password and `[Y/n]` prompts yourself. You can update from it and install new packages from it too.
@@ -125,6 +127,12 @@ Packrat is on the AUR as `packrat`. With paru or yay:
 
 ```bash
 paru -S packrat
+```
+
+Or
+
+```bash
+yay -S packrat
 ```
 
 Or build it by hand:
