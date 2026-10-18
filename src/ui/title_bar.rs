@@ -6,10 +6,12 @@ use gpui_kit::component::StyledExt as _;
 use gpui_kit::*;
 
 use super::{KEY_CONTEXT, Load, Packrat, Refresh};
+use crate::assets;
 
 /// Title bar height; gpui-kit's default is 34px.
 const TITLE_BAR_HEIGHT: f32 = 44.;
 const SEARCH_WIDTH: f32 = 420.;
+const LOGO_SIZE: f32 = 24.;
 
 impl Packrat {
     pub(super) fn render_title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -25,7 +27,7 @@ impl Packrat {
                         .gap_2()
                         .items_center()
                         .flex_shrink_0()
-                        .child(Icon::new(CatalogIcon::Package).size_4().text_color(cx.theme().muted_foreground))
+                        .child(img(assets::LOGO).size(px(LOGO_SIZE)).flex_shrink_0())
                         .child(div().text_sm().font_semibold().child("Packrat")),
                 )
                 .child(

@@ -19,6 +19,11 @@
 - Saved to `~/.config/packrat/settings.json`
 - Without a choice, Packrat uses paru, or yay when paru isn't installed
 
+### 🎨 Branding
+
+- New Packrat logo in the title bar, replacing the generic box icon
+- App icon and `.desktop` file in `packaging/`
+
 ## 0.2.0 - October 7, 2026
 
 ### 🖥️ Terminal pane

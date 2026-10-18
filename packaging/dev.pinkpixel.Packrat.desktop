@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Packrat
+GenericName=Package Manager
+Comment=Browse, update and remove installed packages
+Exec=packrat
+Icon=dev.pinkpixel.Packrat
+Terminal=false
+StartupNotify=true
+StartupWMClass=dev.pinkpixel.Packrat
+Categories=System;PackageManager;
+Keywords=pacman;aur;flatpak;packages;update;

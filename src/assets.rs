@@ -35,11 +35,17 @@ icon_assets!(
     ]
 );
 
+/// The Packrat logo, shown in the title bar.
+pub const LOGO: &str = "images/logo.png";
+
 /// Kit's default icons plus Packrat's extras.
 pub struct AppAssets;
 
 impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
+        if path == LOGO {
+            return Ok(Some(Cow::Borrowed(include_bytes!("../logo.png"))));
+        }
         // Check the extras first: the default source errors on unknown paths.
         if let Some(bytes) = ExtraIcons.load(path)? {
             return Ok(Some(bytes));

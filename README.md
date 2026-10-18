@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Packrat logo" width="250" height="250">
+</p>
+
 # Packrat
 
 Packrat is a desktop app for browsing everything installed on an Arch Linux system: repo packages, AUR packages, and Flatpaks, all in one list.
