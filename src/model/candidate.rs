@@ -154,11 +154,13 @@ fn install_target(remote: &str, remotes: &[Remote]) -> Option<String> {
 
 /// How well a candidate matches a search: exact names first, then name
 /// prefixes, then names containing it, then descriptions that mention every
-/// word. Anything else the tool matched on its own terms comes last.
+/// word. Anything else the tool matched on its own terms comes last. Dashes
+/// and underscores count as spaces, so "muse code" is a prefix of
+/// `muse-code-bin`.
 pub fn rank(candidate: &Candidate, query: &str) -> u8 {
-    let query = query.trim().to_lowercase();
-    let name = candidate.name.to_lowercase();
-    let title = candidate.display_name().to_lowercase();
+    let query = words(query);
+    let name = words(&candidate.name);
+    let title = words(candidate.display_name());
     let description = candidate.description.to_lowercase();
     if name == query || title == query {
         0
@@ -174,6 +176,17 @@ pub fn rank(candidate: &Candidate, query: &str) -> u8 {
     } else {
         4
     }
+}
+
+/// Whether every word of `query` shows up in the name, title or description.
+pub fn has_every_word(candidate: &Candidate, query: &str) -> bool {
+    rank(candidate, query) < 4
+}
+
+/// Lowercase, with dashes and underscores as spaces and runs of spaces
+/// collapsed.
+fn words(text: &str) -> String {
+    text.to_lowercase().replace(['-', '_'], " ").split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Puts the best matches first. Within a rank, repo packages come before the
@@ -262,5 +275,18 @@ mod tests {
         let names: Vec<&str> = found.iter().map(|candidate| candidate.name.as_str()).collect();
         assert_eq!(names, ["md.obsidian.Obsidian", "org.gtk.Gtk3theme.Obsidian-2", "notes"]);
         assert_eq!(rank(&found[2], "obsidian"), 3);
+    }
+
+    #[test]
+    fn dashes_match_spaces() {
+        let found = parse_aur(
+            r#"{"type":"search","results":[{"Name":"muse-code-bin","Version":"1","Description":"An editor"},
+            {"Name":"musescore","Version":"1","Description":"Music notation"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(rank(&found[0], "muse code"), 1);
+        assert_eq!(rank(&found[0], "Muse  Code Bin"), 0);
+        assert!(has_every_word(&found[0], "code muse"));
+        assert!(!has_every_word(&found[1], "muse code"));
     }
 }

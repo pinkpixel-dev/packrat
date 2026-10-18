@@ -87,7 +87,7 @@ Click **Find** at the top of the sidebar and type in the search box. Instead of 
 - The AUR, through its official RPC API (fetched with `curl`, which pacman already depends on)
 - Every Flatpak remote you have set up, with `flatpak search`
 
-You need at least two characters before it searches, since the AUR refuses anything shorter. Results are ranked by how well the name matches, then repo packages come first, then Flatpaks, then AUR packages (most votes first). The source buttons in the header filter results the same way they filter your library.
+You need at least two characters before it searches, since the AUR refuses anything shorter. Every word you type has to show up somewhere in the name or description, in any order, and dashes count as spaces, so "muse code" finds `muse-code-bin`. The AUR and Flatpak only search for exact phrases on their own, so for those Packrat searches the longest word and filters the rest itself. Results are ranked by how well the name matches, then repo packages come first, then Flatpaks, then AUR packages (most votes first). The source buttons in the header filter results the same way they filter your library.
 
 Things you already have get an **Installed** tag, and **Show in Library** jumps to them. Everything else gets an **Install** button. Hover it to see the exact command:
 

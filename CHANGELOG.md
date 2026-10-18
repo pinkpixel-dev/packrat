@@ -7,6 +7,7 @@
 - New **Find** view at the top of the sidebar. While it's open, the search box looks for packages you don't have yet
 - Searches the repos (`pacman -Ss`), the AUR (official RPC API), and every Flatpak remote (`flatpak search`) at the same time
 - Results are ranked by name match first, so "obsidian" puts the Obsidian app ahead of GTK themes with the same name
+- Searches with several words match each word separately everywhere, and dashes count as spaces, so "muse code" finds `muse-code-bin`
 - Already installed results get an **Installed** tag and a **Show in Library** button
 - AUR results show votes, popularity, maintainer, and an out-of-date tag
 - **Install** runs `sudo pacman -S`, `paru -S --aur` / `yay -S --aur`, or `flatpak install` in the terminal pane
