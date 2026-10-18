@@ -2,6 +2,18 @@
 
 ## 0.3.0 - Unreleased
 
+### 🔍 Find and install
+
+- New **Find** view at the top of the sidebar. While it's open, the search box looks for packages you don't have yet
+- Searches the repos (`pacman -Ss`), the AUR (official RPC API), and every Flatpak remote (`flatpak search`) at the same time
+- Results are ranked by name match first, so "obsidian" puts the Obsidian app ahead of GTK themes with the same name
+- Already installed results get an **Installed** tag and a **Show in Library** button
+- AUR results show votes, popularity, maintainer, and an out-of-date tag
+- **Install** runs `sudo pacman -S`, `paru -S --aur` / `yay -S --aur`, or `flatpak install` in the terminal pane
+- If repo updates are waiting, repo installs become `sudo pacman -Syu <package>` so they never install against an old database
+- Flatpaks install system-wide when the remote is set up there
+- If the AUR or Flatpak can't be searched, a short note under the header says so, and the other results still show up
+
 ### ⬆️ Updates
 
 - New **Updates** view in the sidebar, with a count of everything that has a newer version waiting

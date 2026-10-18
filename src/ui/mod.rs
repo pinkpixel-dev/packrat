@@ -1,4 +1,5 @@
 mod details;
+mod find;
 mod package_list;
 mod remove;
 mod settings;
@@ -96,6 +97,10 @@ pub struct Packrat {
     checking_updates: bool,
     /// What the running update command covers, cleared from `updates` when it succeeds.
     updating: Option<Vec<Key>>,
+    /// Whether the running command is a plain `pacman -S` install, which
+    /// fails when the sync DB is out of date.
+    repo_install: bool,
+    find: find::Find,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -108,6 +113,9 @@ impl Packrat {
                 InputEvent::Change => {
                     this.filter.query = search.read(cx).value().to_string();
                     this.refilter(cx);
+                    if this.filter.view == View::Find {
+                        this.search_soon(cx);
+                    }
                 }
                 // Enter hands the keyboard to the list, ready for arrow keys.
                 InputEvent::PressEnter { .. } => this.focus_handle.focus(window, cx),
@@ -118,8 +126,17 @@ impl Packrat {
             // Whatever ran probably changed what's installed.
             PaneEvent::Finished { status, label, auto_close } => {
                 let updated = this.updating.take();
+                let repo_install = std::mem::take(&mut this.repo_install);
                 if *status != Status::Exited(Some(0)) {
                     // Failures stay open so the error is still on screen.
+                    if repo_install {
+                        window.push_notification(
+                            Notification::warning(
+                                "If pacman couldn't download it, your package lists are out of date. Update the system, then try again.",
+                            ),
+                            cx,
+                        );
+                    }
                     return;
                 }
                 if let Some(keys) = updated {
@@ -157,6 +174,8 @@ impl Packrat {
             updates: Rc::default(),
             checking_updates: false,
             updating: None,
+            repo_install: false,
+            find: find::Find::default(),
             _subscriptions: subscriptions,
         };
         this.reload(cx);
@@ -207,6 +226,7 @@ impl Packrat {
             Some(inventory) => self.filter.apply(&inventory.packages, &self.updates),
             None => Vec::new(),
         });
+        self.refilter_find();
         // Keep the selection when it's still listed, otherwise start at the top.
         if !self.selected.is_some_and(|ix| self.visible.contains(&ix)) {
             self.selected = self.visible.first().copied();
@@ -218,6 +238,9 @@ impl Packrat {
     fn set_view(&mut self, view: View, cx: &mut Context<Self>) {
         self.filter.view = view;
         self.refilter(cx);
+        if view == View::Find {
+            self.search_soon(cx);
+        }
     }
 
     fn set_source(&mut self, source: Option<SourceKind>, cx: &mut Context<Self>) {
@@ -232,7 +255,7 @@ impl Packrat {
 
     /// Every sidebar view in order, skipping empty categories like the sidebar does.
     fn sidebar_views(&self) -> Vec<View> {
-        let mut views = vec![View::Apps, View::All, View::Explicit, View::Orphans, View::Updates];
+        let mut views = vec![View::Find, View::Apps, View::All, View::Explicit, View::Orphans, View::Updates];
         if let Some(inventory) = self.inventory() {
             views.extend(
                 Category::ALL
@@ -296,21 +319,31 @@ impl Packrat {
         }
     }
 
+    /// What the list shows right now: inventory indices, or result indices
+    /// in Find.
+    fn rows(&self) -> &Rc<Vec<usize>> {
+        if self.filter.view == View::Find { &self.find.visible } else { &self.visible }
+    }
+
     fn select_row(&mut self, row: usize, cx: &mut Context<Self>) {
-        if let Some(&ix) = self.visible.get(row) {
-            self.selected = Some(ix);
+        if let Some(&ix) = self.rows().get(row) {
+            if self.filter.view == View::Find {
+                self.find.selected = Some(ix);
+            } else {
+                self.selected = Some(ix);
+            }
             self.list_scroll.scroll_to_item(row, ScrollStrategy::Nearest);
             cx.notify();
         }
     }
 
     fn selected_row(&self) -> Option<usize> {
-        let selected = self.selected?;
-        self.visible.iter().position(|&ix| ix == selected)
+        let selected = if self.filter.view == View::Find { self.find.selected } else { self.selected }?;
+        self.rows().iter().position(|&ix| ix == selected)
     }
 
     fn select_next(&mut self, _: &SelectNext, _: &mut Window, cx: &mut Context<Self>) {
-        let row = self.selected_row().map_or(0, |row| (row + 1).min(self.visible.len().saturating_sub(1)));
+        let row = self.selected_row().map_or(0, |row| (row + 1).min(self.rows().len().saturating_sub(1)));
         self.select_row(row, cx);
     }
 
@@ -324,7 +357,7 @@ impl Packrat {
     }
 
     fn select_last(&mut self, _: &SelectLast, _: &mut Window, cx: &mut Context<Self>) {
-        self.select_row(self.visible.len().saturating_sub(1), cx);
+        self.select_row(self.rows().len().saturating_sub(1), cx);
     }
 
     fn focus_search(&mut self, _: &FocusSearch, window: &mut Window, cx: &mut Context<Self>) {

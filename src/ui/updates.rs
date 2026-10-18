@@ -96,8 +96,14 @@ impl Packrat {
 
     /// `sudo pacman -Syu`, covering every pending repo update.
     fn update_system(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let keys = self
-            .inventory()
+        let keys = self.pending_repo_keys();
+        self.start_update(ops::system_update(), keys, false, window, cx);
+    }
+
+    /// Repo packages with an update waiting. Any at all means the system is
+    /// behind the mirrors.
+    pub(super) fn pending_repo_keys(&self) -> Vec<Key> {
+        self.inventory()
             .map(|inventory| {
                 inventory
                     .packages
@@ -106,11 +112,10 @@ impl Packrat {
                     .map(Key::of)
                     .collect()
             })
-            .unwrap_or_default();
-        self.start_update(ops::system_update(), keys, false, window, cx);
+            .unwrap_or_default()
     }
 
-    fn start_update(&mut self, command: Command, keys: Vec<Key>, auto_close: bool, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn start_update(&mut self, command: Command, keys: Vec<Key>, auto_close: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.ready_to_run(window, cx) && self.run_in_pane(command, auto_close, window, cx) {
             self.updating = Some(keys);
         }

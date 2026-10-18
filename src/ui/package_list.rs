@@ -13,7 +13,7 @@ use crate::model::category::Category;
 use crate::model::filter::{Sort, View};
 use crate::model::package::{Package, Source, SourceKind, format_size};
 
-const ROW_HEIGHT: f32 = 56.;
+pub(super) const ROW_HEIGHT: f32 = 56.;
 const HEADER_HEIGHT: f32 = 48.;
 
 impl Packrat {
@@ -22,7 +22,10 @@ impl Packrat {
         let entity = cx.entity().downgrade();
         let has_query = !self.filter.query.trim().is_empty();
 
-        let list = if visible.is_empty() {
+        let find = self.filter.view == View::Find;
+        let list = if find {
+            self.render_find_list(cx)
+        } else if visible.is_empty() {
             let text = match self.filter.view {
                 _ if has_query => "No packages match your search",
                 View::Updates if self.checking_updates => "Checking for updates…",
@@ -75,6 +78,7 @@ impl Packrat {
             .on_action(cx.listener(Self::select_first))
             .on_action(cx.listener(Self::select_last))
             .child(self.render_list_header(cx))
+            .when(find, |this| this.children(self.render_find_errors(cx)))
             .child(div().flex_1().min_h_0().child(list))
     }
 
@@ -85,6 +89,7 @@ impl Packrat {
             View::Explicit => "Installed by You",
             View::Orphans => "Orphans",
             View::Updates => "Updates",
+            View::Find => "Find",
             View::Category(category) => category.label(),
         };
         let sources = [
@@ -94,12 +99,34 @@ impl Packrat {
             (Some(SourceKind::Flatpak), "Flatpak"),
         ];
         let current_sort = self.filter.sort;
+        let find = self.filter.view == View::Find;
+        let searching = find && self.find.searching;
         let show_remove_orphans = self.filter.view == View::Orphans && !self.visible.is_empty();
         let show_updates = self.filter.view == View::Updates;
         let show_update_all = show_updates && !self.updates.is_empty();
         let show_remove_unused =
             self.filter.view == View::Category(Category::Runtimes) && !self.visible.is_empty();
         let this = cx.entity().downgrade();
+        // Search results keep their relevance order, so Find has no sort.
+        let sort_button = Button::new("sort")
+            .ghost()
+            .small()
+            .flex_shrink_0()
+            .icon(Icon::new(CatalogIcon::ArrowDownUp))
+            .label(current_sort.label())
+            .accessibility_label("Sort Packages")
+            .tooltip("Sort")
+            .dropdown_menu(move |mut menu, _, _| {
+                for sort in [Sort::Name, Sort::Size, Sort::Installed] {
+                    let this = this.clone();
+                    menu = menu.item(PopupMenuItem::new(sort.label()).checked(sort == current_sort).on_click(
+                        move |_, _, cx| {
+                            _ = this.update(cx, |this, cx| this.set_sort(sort, cx));
+                        },
+                    ));
+                }
+                menu
+            });
 
         h_flex()
             .h(px(HEADER_HEIGHT))
@@ -121,8 +148,17 @@ impl Packrat {
                             .flex_shrink_0()
                             .text_sm()
                             .text_color(cx.theme().muted_foreground)
-                            .child(self.visible.len().to_string()),
-                    ),
+                            .child(self.rows().len().to_string()),
+                    )
+                    .when(searching, |this| {
+                        this.child(
+                            div()
+                                .flex_shrink_0()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground)
+                                .child("Searching…"),
+                        )
+                    }),
             )
             .when(show_updates, |this| {
                 this.child(
@@ -181,27 +217,7 @@ impl Packrat {
                     .selected(self.filter.source == source)
                     .on_click(cx.listener(move |this, _, _, cx| this.set_source(source, cx)))
             })))
-            .child(
-                Button::new("sort")
-                    .ghost()
-                    .small()
-                    .flex_shrink_0()
-                    .icon(Icon::new(CatalogIcon::ArrowDownUp))
-                    .label(current_sort.label())
-                    .accessibility_label("Sort Packages")
-                    .tooltip("Sort")
-                    .dropdown_menu(move |mut menu, _, _| {
-                        for sort in [Sort::Name, Sort::Size, Sort::Installed] {
-                            let this = this.clone();
-                            menu = menu.item(PopupMenuItem::new(sort.label()).checked(sort == current_sort).on_click(
-                                move |_, _, cx| {
-                                    _ = this.update(cx, |this, cx| this.set_sort(sort, cx));
-                                },
-                            ));
-                        }
-                        menu
-                    }),
-            )
+            .when(!find, |header| header.child(sort_button))
     }
 }
 

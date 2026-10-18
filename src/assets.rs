@@ -32,6 +32,8 @@ icon_assets!(
         ArrowDownUp,
         CircleArrowUp,
         Settings,
+        PackageSearch,
+        Download,
     ]
 );
 

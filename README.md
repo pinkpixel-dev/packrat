@@ -8,7 +8,7 @@ Packrat is a desktop app for browsing everything installed on an Arch Linux syst
 
 I wanted an easier way to see what's actually on my machine. `pacman -Q` gives you about two thousand lines with no real way to tell an app from a library, so Packrat sorts everything into categories you can click through, with search and a details panel for each package.
 
-You can also remove packages from it. Anything that changes your system runs as a real command in a terminal pane at the bottom of the window, so you always see exactly what's running and answer the password and `[Y/n]` prompts yourself. You can update from it too. Installing new packages isn't in yet.
+You can also remove packages from it. Anything that changes your system runs as a real command in a terminal pane at the bottom of the window, so you always see exactly what's running and answer the password and `[Y/n]` prompts yourself. You can update from it and install new packages from it too.
 
 ## What it does
 
@@ -22,6 +22,7 @@ You can also remove packages from it. Anything that changes your system runs as 
 - Click any dependency to jump straight to it
 - Remove a package (repo, AUR, or Flatpak), or clear out every orphan at once
 - See pending updates for repo packages, AUR packages, and Flatpaks, and update them
+- Search the repos, the AUR, and Flatpak remotes for new packages, and install them
 - A built-in terminal pane, which you can also open as a normal shell
 
 ## How it figures out categories
@@ -78,6 +79,29 @@ You can also update a single package from the details panel. AUR packages get re
 
 Click the gear in the title bar to choose your AUR helper. Packrat saves the choice to `~/.config/packrat/settings.json`. If you never pick one, it uses paru, or yay when paru isn't installed.
 
+## Finding and installing packages
+
+Click **Find** at the top of the sidebar and type in the search box. Instead of filtering what you already have, it searches three places at once:
+
+- The repos, with `pacman -Ss`. This reads the package databases already on your disk, so it doesn't touch the network
+- The AUR, through its official RPC API (fetched with `curl`, which pacman already depends on)
+- Every Flatpak remote you have set up, with `flatpak search`
+
+You need at least two characters before it searches, since the AUR refuses anything shorter. Results are ranked by how well the name matches, then repo packages come first, then Flatpaks, then AUR packages (most votes first). The source buttons in the header filter results the same way they filter your library.
+
+Things you already have get an **Installed** tag, and **Show in Library** jumps to them. Everything else gets an **Install** button. Hover it to see the exact command:
+
+| Source | Command |
+|---|---|
+| Repo | `sudo pacman -S <package>` |
+| Repo, with updates waiting | `sudo pacman -Syu <package>` |
+| AUR | `paru -S --aur <package>` (or `yay`) |
+| Flatpak | `sudo flatpak install --system flathub <app-id>` |
+
+The second row is on purpose. If Packrat's last update check found repo updates, your package databases are behind the mirrors, and installing against them can fail or leave you with mismatched library versions. So the install rides along with a full upgrade instead. Packrat never runs `pacman -Sy <package>`, since that's a partial upgrade. If a plain `pacman -S` install fails anyway, Packrat suggests updating the system first.
+
+Flatpaks install system-wide when the remote is set up for the system installation, and to your user installation when it only exists there. pacman, your AUR helper, and Flatpak all show what they're about to do and ask before doing it, so you get the final say in the pane.
+
 ## The terminal pane
 
 Press `` Ctrl+` `` to open or hide it, and drag its top edge to resize it. With nothing running, **Open Shell** starts your normal shell (`$SHELL`) in it.
@@ -88,9 +112,9 @@ It's a real terminal, using the same emulator as Alacritty, so colors, progress 
 
 - Arch Linux or an Arch-based distro (I use CachyOS)
 - A GPU with a working Vulkan driver, since GPUI draws with Vulkan
-- `sudo` set up for your user, since removals and updates run `sudo pacman`
+- `sudo` set up for your user, since installs, removals, and updates run `sudo pacman`
 - `pacman-contrib` for repo update checks (`checkupdates`)
-- `paru` or `yay` if you want AUR updates
+- `paru` or `yay` if you want to install or update AUR packages
 - Flatpak is optional. Without it you just won't see a Flatpak section.
 
 ## Building

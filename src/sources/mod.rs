@@ -1,5 +1,6 @@
 pub mod flatpak;
 pub mod pacman;
+pub mod search;
 pub mod updates;
 
 use std::path::Path;

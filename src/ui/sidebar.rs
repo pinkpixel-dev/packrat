@@ -34,16 +34,17 @@ impl Packrat {
             (View::Orphans, CatalogIcon::Unlink, "Orphans"),
             (View::Updates, CatalogIcon::CircleArrowUp, "Updates"),
         ];
+        let find_row = self.sidebar_row(View::Find, CatalogIcon::PackageSearch, "Find", None, cx);
         let library_rows: Vec<AnyElement> = library
             .into_iter()
-            .map(|(view, icon, label)| self.sidebar_row(view, icon, label, count(view), cx))
+            .map(|(view, icon, label)| self.sidebar_row(view, icon, label, Some(count(view)), cx))
             .collect();
         let category_rows: Vec<AnyElement> = Category::ALL
             .into_iter()
             .filter_map(|category| {
                 let view = View::Category(category);
                 let count = count(view);
-                (count > 0).then(|| self.sidebar_row(view, category.icon(), category.label(), count, cx))
+                (count > 0).then(|| self.sidebar_row(view, category.icon(), category.label(), Some(count), cx))
             })
             .collect();
 
@@ -59,6 +60,8 @@ impl Packrat {
             .border_color(cx.theme().border)
             .bg(cx.theme().sidebar)
             .overflow_y_scrollbar()
+            .child(find_row)
+            .child(section_label("Library", cx))
             .children(library_rows)
             .child(section_label("Categories", cx))
             .children(category_rows)
@@ -70,7 +73,7 @@ impl Packrat {
         view: View,
         icon: CatalogIcon,
         label: &'static str,
-        count: usize,
+        count: Option<usize>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let selected = self.filter.view == view;
@@ -93,7 +96,7 @@ impl Packrat {
             })
             .child(Icon::new(icon).small().text_color(if selected { theme.foreground } else { theme.muted_foreground }))
             .child(div().flex_1().min_w_0().truncate().child(label))
-            .child(div().text_xs().text_color(theme.muted_foreground).child(count.to_string()))
+            .children(count.map(|count| div().text_xs().text_color(theme.muted_foreground).child(count.to_string())))
             .on_click(cx.listener(move |this, _, _, cx| this.set_view(view, cx)))
             .into_any_element()
     }

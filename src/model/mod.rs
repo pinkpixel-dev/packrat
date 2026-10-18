@@ -1,3 +1,4 @@
+pub mod candidate;
 pub mod category;
 pub mod filter;
 pub mod inventory;

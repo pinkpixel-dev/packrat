@@ -9,15 +9,19 @@ use gpui_kit::*;
 
 use super::Packrat;
 use super::package_list::source_tag;
+use crate::model::filter::View;
 use crate::model::package::{Package, Reason, Source, format_date, format_size, strip_constraint};
 
-const DETAILS_WIDTH: f32 = 380.;
+pub(super) const DETAILS_WIDTH: f32 = 380.;
 /// Long dependency lists (glibc is needed by over a thousand packages) stop
 /// here, with a count of the rest.
 const MAX_CHIPS: usize = 60;
 
 impl Packrat {
     pub(super) fn render_details(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.filter.view == View::Find {
+            return self.render_candidate_details(cx);
+        }
         let panel = v_flex()
             .id("details")
             .w(px(DETAILS_WIDTH))
@@ -198,7 +202,7 @@ fn facts(package: &Package, update: Option<&str>, cx: &App) -> impl IntoElement 
         })
 }
 
-fn fact_row(label: &str, value: AnyElement, cx: &App) -> AnyElement {
+pub(super) fn fact_row(label: &str, value: AnyElement, cx: &App) -> AnyElement {
     h_flex()
         .gap_3()
         .text_sm()

@@ -10,6 +10,8 @@ pub enum View {
     Explicit,
     Orphans,
     Updates,
+    /// Search results for packages you don't have yet.
+    Find,
     Category(Category),
 }
 
@@ -60,6 +62,7 @@ impl Filter {
             View::Explicit => package.reason == Reason::Explicit,
             View::Orphans => package.orphan,
             View::Updates => updates.get(package).is_some(),
+            View::Find => false,
             View::Category(category) => package.category == category,
         }
     }

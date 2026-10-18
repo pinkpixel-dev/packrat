@@ -151,6 +151,31 @@ pub fn flatpak_update(package: &Package) -> Option<Command> {
     Some(command_from(words))
 }
 
+/// Installs a repo package. When the system is behind, the install rides
+/// along with a full upgrade (`-Syu <pkg>`), never `-Sy <pkg>`, which would be
+/// a partial upgrade.
+pub fn pacman_install(name: &str, full_upgrade: bool) -> Command {
+    let operation = if full_upgrade { "-Syu" } else { "-S" };
+    Command::new("sudo", ["pacman", operation, name])
+}
+
+/// Builds and installs an AUR package. The helper shows the PKGBUILD and
+/// asks for sudo itself.
+pub fn aur_install(helper: AurHelper, name: &str) -> Command {
+    Command::new(helper.program(), ["-S", "--aur", name])
+}
+
+/// Installs a Flatpak from `remote`, with `sudo` for system installs like
+/// removal does.
+pub fn flatpak_install(remote: &str, id: &str, installation: &str) -> Command {
+    let mut words: Vec<String> = Vec::new();
+    if installation != "user" {
+        words.push("sudo".into());
+    }
+    words.extend(["flatpak".into(), "install".into(), installation_flag(installation), remote.into(), id.into()]);
+    command_from(words)
+}
+
 /// Everything at once: a full pacman upgrade, then AUR packages, then each
 /// Flatpak installation with updates. Each step only runs if the one before
 /// it succeeded.
@@ -203,6 +228,21 @@ mod tests {
         assert_eq!(
             update_all(true, Some(AurHelper::Paru), &["user", "system"]).unwrap().display(),
             "sh -c sudo pacman -Syu && paru -Sua && flatpak update --user && sudo flatpak update --system"
+        );
+    }
+
+    #[test]
+    fn builds_install_commands() {
+        assert_eq!(pacman_install("ripgrep", false).display(), "sudo pacman -S ripgrep");
+        assert_eq!(pacman_install("ripgrep", true).display(), "sudo pacman -Syu ripgrep");
+        assert_eq!(aur_install(AurHelper::Paru, "code-git").display(), "paru -S --aur code-git");
+        assert_eq!(
+            flatpak_install("flathub", "md.obsidian.Obsidian", "system").display(),
+            "sudo flatpak install --system flathub md.obsidian.Obsidian"
+        );
+        assert_eq!(
+            flatpak_install("dev", "org.example.App", "user").display(),
+            "flatpak install --user dev org.example.App"
         );
     }
 
