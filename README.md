@@ -117,9 +117,29 @@ It's a real terminal, using the same emulator as Alacritty, so colors, progress 
 - `paru` or `yay` if you want to install or update AUR packages
 - Flatpak is optional. Without it you just won't see a Flatpak section.
 
+The AUR package pulls in the required pieces and lists `pacman-contrib`, `paru`, `yay`, and `flatpak` as optional.
+
+## Installing
+
+Packrat is on the AUR as `packrat`. With paru or yay:
+
+```bash
+paru -S packrat
+```
+
+Or build it by hand:
+
+```bash
+git clone https://aur.archlinux.org/packrat.git
+cd packrat
+makepkg -si
+```
+
+It builds from source, so the first install takes a few minutes. You get `packrat` on your `PATH` and a Packrat entry in your app launcher.
+
 ## Building
 
-You need Rust 1.92 or newer.
+If you'd rather build from the repo, you need Rust 1.92 or newer.
 
 ```bash
 git clone https://github.com/pinkpixel-dev/packrat.git

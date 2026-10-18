@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 - Unreleased
+## 1.0.0 - October 18, 2026
 
 ### 🔍 Find and install
 
@@ -36,6 +36,15 @@
 
 - New Packrat logo in the title bar, replacing the generic box icon
 - App icon and `.desktop` file in `packaging/`
+
+### 📦 Packaging
+
+- AUR PKGBUILD in `packaging/aur/` that builds from the release tag, runs the tests, and installs the binary, desktop entry, icon, and license
+- `pacman-contrib`, `paru`, `yay`, and `flatpak` are optional dependencies, since Packrat works without them
+
+### 🏷️ Versioning
+
+- Bumped to 1.0.0, the first release published to the AUR
 
 ## 0.2.0 - October 7, 2026
 
