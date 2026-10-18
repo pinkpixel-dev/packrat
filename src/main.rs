@@ -1,6 +1,7 @@
 mod assets;
 mod model;
 mod ops;
+mod settings;
 mod sources;
 mod terminal;
 mod theme;

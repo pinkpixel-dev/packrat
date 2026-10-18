@@ -39,6 +39,15 @@ impl Packrat {
                     ),
                 )
                 .child(
+                    Button::new("settings")
+                        .ghost()
+                        .small()
+                        .icon(Icon::new(CatalogIcon::Settings))
+                        .accessibility_label("Settings")
+                        .tooltip("Settings")
+                        .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+                )
+                .child(
                     Button::new("refresh")
                         .ghost()
                         .small()

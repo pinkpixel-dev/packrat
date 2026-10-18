@@ -1,8 +1,10 @@
 mod details;
 mod package_list;
 mod remove;
+mod settings;
 mod sidebar;
 mod title_bar;
+mod updates;
 
 use std::rc::Rc;
 
@@ -16,6 +18,8 @@ use crate::model::category::Category;
 use crate::model::filter::{Filter, Sort, View};
 use crate::model::inventory::Inventory;
 use crate::model::package::{Package, SourceKind, strip_constraint};
+use crate::model::update::{Key, Updates};
+use crate::settings::{AurHelper, Settings};
 use crate::sources;
 use crate::terminal::{Command, PaneEvent, Status, TerminalView};
 
@@ -85,6 +89,13 @@ pub struct Packrat {
     list_scroll: UniformListScrollHandle,
     terminal: Entity<TerminalView>,
     terminal_open: bool,
+    settings: Settings,
+    /// AUR helpers found on `PATH` at startup.
+    aur_helpers: Vec<AurHelper>,
+    updates: Rc<Updates>,
+    checking_updates: bool,
+    /// What the running update command covers, cleared from `updates` when it succeeds.
+    updating: Option<Vec<Key>>,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -106,9 +117,14 @@ impl Packrat {
         subscriptions.push(cx.subscribe_in(&terminal, window, |this, _, event: &PaneEvent, window, cx| match event {
             // Whatever ran probably changed what's installed.
             PaneEvent::Finished { status, label, auto_close } => {
+                let updated = this.updating.take();
                 if *status != Status::Exited(Some(0)) {
                     // Failures stay open so the error is still on screen.
                     return;
+                }
+                if let Some(keys) = updated {
+                    let updates = Rc::make_mut(&mut this.updates);
+                    keys.iter().for_each(|key| updates.remove(key));
                 }
                 this.reload(cx);
                 if *auto_close {
@@ -136,9 +152,16 @@ impl Packrat {
             list_scroll: UniformListScrollHandle::new(),
             terminal,
             terminal_open: false,
+            settings: Settings::load(),
+            aur_helpers: AurHelper::installed(),
+            updates: Rc::default(),
+            checking_updates: false,
+            updating: None,
             _subscriptions: subscriptions,
         };
         this.reload(cx);
+        // Once at startup; after that only the Check button looks again.
+        this.check_updates(window, cx);
         this
     }
 
@@ -181,7 +204,7 @@ impl Packrat {
 
     fn refilter(&mut self, cx: &mut Context<Self>) {
         self.visible = Rc::new(match self.inventory() {
-            Some(inventory) => self.filter.apply(&inventory.packages),
+            Some(inventory) => self.filter.apply(&inventory.packages, &self.updates),
             None => Vec::new(),
         });
         // Keep the selection when it's still listed, otherwise start at the top.
@@ -209,13 +232,13 @@ impl Packrat {
 
     /// Every sidebar view in order, skipping empty categories like the sidebar does.
     fn sidebar_views(&self) -> Vec<View> {
-        let mut views = vec![View::Apps, View::All, View::Explicit, View::Orphans];
+        let mut views = vec![View::Apps, View::All, View::Explicit, View::Orphans, View::Updates];
         if let Some(inventory) = self.inventory() {
             views.extend(
                 Category::ALL
                     .into_iter()
                     .map(View::Category)
-                    .filter(|&view| inventory.packages.iter().any(|package| Filter::in_view(view, package))),
+                    .filter(|&view| inventory.packages.iter().any(|package| Filter::in_view(view, package, &self.updates))),
             );
         }
         views
@@ -314,14 +337,24 @@ impl Packrat {
 
     /// Opens the terminal pane and runs `command` in it.
     pub(super) fn run_command(&mut self, command: Command, window: &mut Window, cx: &mut Context<Self>) {
+        self.run_in_pane(command, true, window, cx);
+    }
+
+    /// Like [`Self::run_command`], choosing whether the pane closes itself
+    /// after success. Returns whether the command started.
+    fn run_in_pane(&mut self, command: Command, auto_close: bool, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let label = command.display();
-        let result = self.terminal.update(cx, |terminal, cx| terminal.run(command, true, window, cx));
+        let result = self.terminal.update(cx, |terminal, cx| terminal.run(command, auto_close, window, cx));
         match result {
             Ok(()) => {
                 self.terminal_open = true;
                 cx.notify();
+                true
             }
-            Err(err) => window.push_notification(Notification::error(format!("Couldn't run {label}: {err}")), cx),
+            Err(err) => {
+                window.push_notification(Notification::error(format!("Couldn't run {label}: {err}")), cx);
+                false
+            }
         }
     }
 

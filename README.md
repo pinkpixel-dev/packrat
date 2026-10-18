@@ -4,7 +4,7 @@ Packrat is a desktop app for browsing everything installed on an Arch Linux syst
 
 I wanted an easier way to see what's actually on my machine. `pacman -Q` gives you about two thousand lines with no real way to tell an app from a library, so Packrat sorts everything into categories you can click through, with search and a details panel for each package.
 
-You can also remove packages from it. Anything that changes your system runs as a real command in a terminal pane at the bottom of the window, so you always see exactly what's running and answer the password and `[Y/n]` prompts yourself. Updates and installing new packages aren't in yet.
+You can also remove packages from it. Anything that changes your system runs as a real command in a terminal pane at the bottom of the window, so you always see exactly what's running and answer the password and `[Y/n]` prompts yourself. You can update from it too. Installing new packages isn't in yet.
 
 ## What it does
 
@@ -17,6 +17,7 @@ You can also remove packages from it. Anything that changes your system runs as 
 - Shows each package's version, size, install date, license, website, dependencies, what needs it, and optional dependencies
 - Click any dependency to jump straight to it
 - Remove a package (repo, AUR, or Flatpak), or clear out every orphan at once
+- See pending updates for repo packages, AUR packages, and Flatpaks, and update them
 - A built-in terminal pane, which you can also open as a normal shell
 
 ## How it figures out categories
@@ -49,6 +50,30 @@ Flatpaks use `flatpak uninstall`. System-wide Flatpaks get `sudo` in front, whic
 
 When a command finishes successfully, the package list reloads and the pane closes itself after a moment. If something fails, the pane stays open so you can read the error.
 
+## Updating
+
+Packrat checks for updates once when it starts. The **Updates** view in the sidebar lists everything with a newer version waiting, and every row shows the version change (`1.0.8 → 1.0.9`). Click **Check** in that view to look again.
+
+The checks don't touch your real package databases:
+
+- Repo packages come from `checkupdates` (part of `pacman-contrib`), which syncs a throwaway copy of the databases
+- AUR packages come from `paru -Qua` or `yay -Qua`
+- Flatpaks come from `flatpak remote-ls --updates`, one remote at a time, so one broken remote doesn't hide the rest
+
+**Update All** runs everything in the terminal pane, one step after another, stopping if a step fails:
+
+```bash
+sudo pacman -Syu && paru -Sua && flatpak update --user && sudo flatpak update --system
+```
+
+Packrat only includes the steps that have something to update. The pane stays open afterwards, because pacman sometimes prints things worth reading (like new `.pacnew` files).
+
+You can also update a single package from the details panel. AUR packages get rebuilt with `paru -S --aur <package>` and Flatpaks run `flatpak update <id>`. Repo packages show **Update System** instead, which runs a full `sudo pacman -Syu`. Updating one repo package by itself is a partial upgrade, which Arch doesn't support and which can break things in fun ways.
+
+### Picking paru or yay
+
+Click the gear in the title bar to choose your AUR helper. Packrat saves the choice to `~/.config/packrat/settings.json`. If you never pick one, it uses paru, or yay when paru isn't installed.
+
 ## The terminal pane
 
 Press `` Ctrl+` `` to open or hide it, and drag its top edge to resize it. With nothing running, **Open Shell** starts your normal shell (`$SHELL`) in it.
@@ -59,7 +84,9 @@ It's a real terminal, using the same emulator as Alacritty, so colors, progress 
 
 - Arch Linux or an Arch-based distro (I use CachyOS)
 - A GPU with a working Vulkan driver, since GPUI draws with Vulkan
-- `sudo` set up for your user, since removals run `sudo pacman`
+- `sudo` set up for your user, since removals and updates run `sudo pacman`
+- `pacman-contrib` for repo update checks (`checkupdates`)
+- `paru` or `yay` if you want AUR updates
 - Flatpak is optional. Without it you just won't see a Flatpak section.
 
 ## Building

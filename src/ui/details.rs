@@ -1,7 +1,8 @@
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, IconName, Sizable as _, h_flex, v_flex};
+use gpui_kit::assets::IconName as CatalogIcon;
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, Icon, IconName, Sizable as _, h_flex, v_flex};
 use gpui_kit::component::StyledExt as _;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -37,13 +38,32 @@ impl Packrat {
         };
 
         let ix = self.selected.unwrap_or_default();
+        let update = self.updates.get(package);
+        let update_button = update.map(|_| {
+            let (label, tooltip) = match &package.source {
+                Source::Repo(_) => ("Update System", "Repo packages update together: sudo pacman -Syu".to_string()),
+                Source::Aur => match self.aur_helper() {
+                    Some(helper) => ("Update", format!("Rebuild with {}", helper.program())),
+                    None => ("Update", "Install paru or yay to update AUR packages".to_string()),
+                },
+                Source::Flatpak { .. } => ("Update", "flatpak update".to_string()),
+            };
+            Button::new("update-package")
+                .primary()
+                .small()
+                .icon(Icon::new(CatalogIcon::CircleArrowUp))
+                .label(label)
+                .tooltip(tooltip)
+                .disabled(package.source == Source::Aur && self.aur_helper().is_none())
+                .on_click(cx.listener(move |this, _, window, cx| this.update_package(ix, window, cx)))
+        });
         panel
             .p_5()
             .gap_5()
             .overflow_y_scrollbar()
             .child(header(package, cx))
             .child(
-                h_flex().child(
+                h_flex().gap_2().children(update_button).child(
                     Button::new("remove-package")
                         .danger()
                         .outline()
@@ -54,7 +74,7 @@ impl Packrat {
                         .on_click(cx.listener(move |this, _, window, cx| this.remove_package(ix, window, cx))),
                 ),
             )
-            .child(facts(package, cx))
+            .child(facts(package, update, cx))
             .children(self.chip_section("Depends on", &package.depends, cx))
             .children(self.chip_section("Required by", &package.required_by, cx))
             .children(self.chip_section("Optional for", &package.optional_for, cx))
@@ -142,8 +162,11 @@ fn header(package: &Package, cx: &App) -> impl IntoElement {
         })
 }
 
-fn facts(package: &Package, cx: &App) -> impl IntoElement {
+fn facts(package: &Package, update: Option<&str>, cx: &App) -> impl IntoElement {
     let mut rows: Vec<(&str, String)> = vec![("Version", package.version.clone())];
+    if let Some(new) = update {
+        rows.push(("Update", new.to_string()));
+    }
     match &package.source {
         Source::Repo(repo) => rows.push(("Repository", repo.clone())),
         Source::Aur => rows.push(("Repository", "AUR or local build".into())),

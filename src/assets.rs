@@ -30,6 +30,8 @@ icon_assets!(
         Pin,
         Unlink,
         ArrowDownUp,
+        CircleArrowUp,
+        Settings,
     ]
 );
 

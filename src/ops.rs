@@ -7,6 +7,8 @@
 use std::process::Command as Process;
 
 use crate::model::package::{Package, Source};
+use crate::settings::AurHelper;
+use crate::sources::updates::installation_flag;
 use crate::terminal::Command;
 
 /// One package a removal would take out.
@@ -128,11 +130,81 @@ pub fn flatpak_remove_unused(installations: &[&str]) -> Option<Command> {
     }
 }
 
+/// A full system upgrade. pacman packages only ever update this way: `-Sy`
+/// plus a single package is a partial upgrade, which Arch doesn't support.
+pub fn system_update() -> Command {
+    Command::new("sudo", ["pacman", "-Syu"])
+}
+
+/// Rebuilds one AUR package. The helper asks for sudo itself when it installs.
+pub fn aur_update(helper: AurHelper, name: &str) -> Command {
+    Command::new(helper.program(), ["-S", "--aur", name])
+}
+
+/// Updates one Flatpak, with `sudo` for system installs like removal does.
+pub fn flatpak_update(package: &Package) -> Option<Command> {
+    let Source::Flatpak { installation } = &package.source else {
+        return None;
+    };
+    let mut words = flatpak_update_words(installation);
+    words.push(package.name.clone());
+    Some(command_from(words))
+}
+
+/// Everything at once: a full pacman upgrade, then AUR packages, then each
+/// Flatpak installation with updates. Each step only runs if the one before
+/// it succeeded.
+pub fn update_all(repo: bool, aur: Option<AurHelper>, flatpak_installations: &[&str]) -> Option<Command> {
+    let mut steps: Vec<Vec<String>> = Vec::new();
+    if repo {
+        let update = system_update();
+        steps.push(std::iter::once(update.program).chain(update.args).collect());
+    }
+    if let Some(helper) = aur {
+        steps.push(vec![helper.program().into(), "-Sua".into()]);
+    }
+    steps.extend(flatpak_installations.iter().map(|installation| flatpak_update_words(installation)));
+    match steps.len() {
+        0 => None,
+        1 => steps.pop().map(command_from),
+        _ => {
+            let script = steps.iter().map(|words| words.join(" ")).collect::<Vec<_>>().join(" && ");
+            Some(Command::new("sh", ["-c".to_string(), script]))
+        }
+    }
+}
+
+fn flatpak_update_words(installation: &str) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    if installation != "user" {
+        words.push("sudo".into());
+    }
+    words.extend(["flatpak".into(), "update".into(), installation_flag(installation)]);
+    words
+}
+
+fn command_from(mut words: Vec<String>) -> Command {
+    let program = words.remove(0);
+    Command::new(program, words)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::category::Category;
     use crate::model::package::Reason;
+
+    #[test]
+    fn builds_update_commands() {
+        assert_eq!(system_update().display(), "sudo pacman -Syu");
+        assert_eq!(aur_update(AurHelper::Yay, "ttt").display(), "yay -S --aur ttt");
+        assert!(update_all(false, None, &[]).is_none());
+        assert_eq!(update_all(false, Some(AurHelper::Paru), &[]).unwrap().display(), "paru -Sua");
+        assert_eq!(
+            update_all(true, Some(AurHelper::Paru), &["user", "system"]).unwrap().display(),
+            "sh -c sudo pacman -Syu && paru -Sua && flatpak update --user && sudo flatpak update --system"
+        );
+    }
 
     #[test]
     fn parses_print_output() {

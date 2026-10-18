@@ -23,7 +23,7 @@ impl Packrat {
                 .packages
                 .iter()
                 .filter(|package| self.filter.source.is_none_or(|kind| package.source.kind() == kind))
-                .filter(|package| Filter::in_view(view, package))
+                .filter(|package| Filter::in_view(view, package, &self.updates))
                 .count()
         };
 
@@ -32,6 +32,7 @@ impl Packrat {
             (View::All, CatalogIcon::Package, "All Packages"),
             (View::Explicit, CatalogIcon::Pin, "Installed by You"),
             (View::Orphans, CatalogIcon::Unlink, "Orphans"),
+            (View::Updates, CatalogIcon::CircleArrowUp, "Updates"),
         ];
         let library_rows: Vec<AnyElement> = library
             .into_iter()

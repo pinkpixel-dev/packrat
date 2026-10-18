@@ -76,7 +76,7 @@ impl Packrat {
     }
 
     /// One command at a time: pacman holds a lock, and so does the pane.
-    fn ready_to_run(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(super) fn ready_to_run(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.terminal.read(cx).is_running(cx) {
             window.push_notification(Notification::warning("Wait for the current command to finish first."), cx);
             return false;

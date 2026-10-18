@@ -1,5 +1,6 @@
 use super::category::Category;
 use super::package::{Package, Reason, SourceKind};
+use super::update::Updates;
 
 /// The sidebar selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -8,6 +9,7 @@ pub enum View {
     Apps,
     Explicit,
     Orphans,
+    Updates,
     Category(Category),
 }
 
@@ -51,23 +53,24 @@ impl Default for Filter {
 
 impl Filter {
     /// Whether a package shows up for this view, ignoring source and search.
-    pub fn in_view(view: View, package: &Package) -> bool {
+    pub fn in_view(view: View, package: &Package, updates: &Updates) -> bool {
         match view {
             View::All => true,
             View::Apps => package.category.is_app(),
             View::Explicit => package.reason == Reason::Explicit,
             View::Orphans => package.orphan,
+            View::Updates => updates.get(package).is_some(),
             View::Category(category) => package.category == category,
         }
     }
 
     /// Indices into `packages` that match, in display order.
-    pub fn apply(&self, packages: &[Package]) -> Vec<usize> {
+    pub fn apply(&self, packages: &[Package], updates: &Updates) -> Vec<usize> {
         let query = self.query.trim().to_lowercase();
         let mut matches: Vec<usize> = packages
             .iter()
             .enumerate()
-            .filter(|(_, package)| Self::in_view(self.view, package))
+            .filter(|(_, package)| Self::in_view(self.view, package, updates))
             .filter(|(_, package)| self.source.is_none_or(|kind| package.source.kind() == kind))
             .filter(|(_, package)| query.is_empty() || search_rank(package, &query).is_some())
             .map(|(ix, _)| ix)
@@ -113,6 +116,7 @@ fn search_rank(package: &Package, query: &str) -> Option<u8> {
 mod tests {
     use super::*;
     use crate::model::package::Source;
+    use crate::model::update::Key;
 
     fn package(name: &str, description: &str, size: u64) -> Package {
         Package {
@@ -149,7 +153,7 @@ mod tests {
             query: "git".into(),
             ..Filter::default()
         };
-        let names: Vec<&str> = filter.apply(&packages).iter().map(|&ix| packages[ix].name.as_str()).collect();
+        let names: Vec<&str> = filter.apply(&packages, &Updates::default()).iter().map(|&ix| packages[ix].name.as_str()).collect();
         assert_eq!(names, ["git", "git-lfs", "fd", "tig"]);
     }
 
@@ -163,13 +167,21 @@ mod tests {
             sort: Sort::Size,
             ..Filter::default()
         };
-        let names: Vec<&str> = filter.apply(&packages).iter().map(|&ix| packages[ix].name.as_str()).collect();
+        let names: Vec<&str> = filter.apply(&packages, &Updates::default()).iter().map(|&ix| packages[ix].name.as_str()).collect();
         assert_eq!(names, ["big", "leftover", "small"]);
 
         let orphans = Filter {
             view: View::Orphans,
             ..Filter::default()
         };
-        assert_eq!(orphans.apply(&packages), [2]);
+        assert_eq!(orphans.apply(&packages, &Updates::default()), [2]);
+
+        let mut updates = Updates::default();
+        updates.insert(Key::Pacman("big".into()), "2".into());
+        let pending = Filter {
+            view: View::Updates,
+            ..Filter::default()
+        };
+        assert_eq!(pending.apply(&packages, &updates), [1]);
     }
 }

@@ -3,7 +3,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 use gpui_kit::component::scroll::ScrollableElement as _;
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, Icon, Selectable as _, Sizable as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Icon, IconName, Selectable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::component::StyledExt as _;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -23,7 +23,12 @@ impl Packrat {
         let has_query = !self.filter.query.trim().is_empty();
 
         let list = if visible.is_empty() {
-            let text = if has_query { "No packages match your search" } else { "Nothing here" };
+            let text = match self.filter.view {
+                _ if has_query => "No packages match your search",
+                View::Updates if self.checking_updates => "Checking for updates…",
+                View::Updates => "Everything's up to date",
+                _ => "Nothing here",
+            };
             div()
                 .size_full()
                 .flex()
@@ -47,7 +52,8 @@ impl Packrat {
                             .filter_map(|row| {
                                 let ix = *this.visible.get(row)?;
                                 let package = this.package(ix)?;
-                                Some(render_row(row, package, this.selected == Some(ix), entity.clone(), cx))
+                                let update = this.updates.get(package);
+                                Some(render_row(row, package, update, this.selected == Some(ix), entity.clone(), cx))
                             })
                             .collect()
                     })
@@ -78,6 +84,7 @@ impl Packrat {
             View::Apps => "Apps",
             View::Explicit => "Installed by You",
             View::Orphans => "Orphans",
+            View::Updates => "Updates",
             View::Category(category) => category.label(),
         };
         let sources = [
@@ -88,6 +95,8 @@ impl Packrat {
         ];
         let current_sort = self.filter.sort;
         let show_remove_orphans = self.filter.view == View::Orphans && !self.visible.is_empty();
+        let show_updates = self.filter.view == View::Updates;
+        let show_update_all = show_updates && !self.updates.is_empty();
         let show_remove_unused =
             self.filter.view == View::Category(Category::Runtimes) && !self.visible.is_empty();
         let this = cx.entity().downgrade();
@@ -115,6 +124,31 @@ impl Packrat {
                             .child(self.visible.len().to_string()),
                     ),
             )
+            .when(show_updates, |this| {
+                this.child(
+                    Button::new("check-updates")
+                        .ghost()
+                        .small()
+                        .flex_shrink_0()
+                        .icon(IconName::RefreshCw)
+                        .label("Check")
+                        .loading(self.checking_updates)
+                        .tooltip("Check for updates")
+                        .on_click(cx.listener(|this, _, window, cx| this.check_updates(window, cx))),
+                )
+            })
+            .when(show_update_all, |this| {
+                this.child(
+                    Button::new("update-all")
+                        .primary()
+                        .small()
+                        .flex_shrink_0()
+                        .icon(Icon::new(CatalogIcon::CircleArrowUp))
+                        .label("Update All")
+                        .tooltip("Full system upgrade, then AUR and Flatpak")
+                        .on_click(cx.listener(|this, _, window, cx| this.update_all(window, cx))),
+                )
+            })
             .when(show_remove_orphans, |this| {
                 this.child(
                     Button::new("remove-orphans")
@@ -171,11 +205,22 @@ impl Packrat {
     }
 }
 
-fn render_row(row: usize, package: &Package, selected: bool, entity: WeakEntity<Packrat>, cx: &App) -> AnyElement {
+fn render_row(
+    row: usize,
+    package: &Package,
+    update: Option<&str>,
+    selected: bool,
+    entity: WeakEntity<Packrat>,
+    cx: &App,
+) -> AnyElement {
     let theme = cx.theme();
     let name = package.display_name().to_string();
     // Show the package name too when the launcher name hides it.
     let subtitle = (name != package.name).then(|| package.name.clone());
+    let version = match update {
+        Some(new) if new != package.version => format!("{} → {new}", package.version),
+        _ => package.version.clone(),
+    };
 
     h_flex()
         .id(row)
@@ -207,8 +252,8 @@ fn render_row(row: usize, package: &Package, selected: bool, entity: WeakEntity<
                             div()
                                 .flex_shrink_0()
                                 .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .child(package.version.clone()),
+                                .text_color(if update.is_some() { theme.foreground } else { theme.muted_foreground })
+                                .child(version),
                         ),
                 )
                 .child(

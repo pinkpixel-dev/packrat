@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 - Unreleased
+
+### ⬆️ Updates
+
+- New **Updates** view in the sidebar, with a count of everything that has a newer version waiting
+- Checks repo packages with `checkupdates`, AUR packages with `paru -Qua` or `yay -Qua`, and Flatpaks remote by remote
+- Checks once at startup, then again whenever you click **Check**
+- Rows show `old → new` versions in every view, and the details panel shows the new version
+- **Update All** runs `sudo pacman -Syu`, then the AUR helper, then `flatpak update` for each installation, in the terminal pane
+- **Update** in the details panel rebuilds one AUR package or updates one Flatpak
+- Repo packages get **Update System** instead, since updating one by itself would be a partial upgrade
+- Full upgrades keep the pane open afterwards so you can read pacman's notes
+
+### ⚙️ Settings
+
+- New settings dialog (gear in the title bar) to pick paru or yay as your AUR helper
+- Saved to `~/.config/packrat/settings.json`
+- Without a choice, Packrat uses paru, or yay when paru isn't installed
+
 ## 0.2.0 - October 7, 2026
 
 ### 🖥️ Terminal pane
